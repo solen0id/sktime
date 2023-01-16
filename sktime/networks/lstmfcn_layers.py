@@ -873,3 +873,46 @@ def make_attention_lstm():
             return cls(**config)
 
     return AttentionLSTM
+
+
+def squeeze_excite_block(input_, ratio=16):
+    """
+    Create a channel-wise squeeze-excite block.
+
+    Args
+    ----
+      input_: input tensor
+      ratio: number of output filters
+
+    Returns
+    -------
+       Keras tensor
+
+    References
+    ----------
+      - [Squeeze and Excitation Networks](https://arxiv.org/abs/1709.01507)
+    """
+    from keras import backend as K
+    from keras.layers import Dense, GlobalAveragePooling1D, Permute, Reshape, multiply
+
+    channel_axis = 1 if K.image_data_format() == "channels_first" else -1
+    filters = input_.shape[channel_axis]
+    se_shape = (1, filters)
+
+    se = GlobalAveragePooling1D()(input_)
+    se = Reshape(se_shape)(se)
+    se = Dense(
+        filters // ratio,
+        activation="relu",
+        kernel_initializer="he_normal",
+        use_bias=False,
+    )(se)
+    se = Dense(
+        filters, activation="sigmoid", kernel_initializer="he_normal", use_bias=False
+    )(se)
+
+    if K.image_data_format() == "channels_first":
+        se = Permute((3, 1, 2))(se)
+
+    x = multiply([input_, se])
+    return x
